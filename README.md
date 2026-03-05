@@ -6,3 +6,6 @@ and add variables `JWT_SECRET`, `ACCESS_SECRET`, `REFRESH_SECRET` with HS256 gen
 
 Run `npm install` from root
 After that `node server.js` from root
+
+
+db.js --- Database configuration
