@@ -1,8 +1,9 @@
-const pool = require("../config/db")
-const bcrypt = require("bcryptjs")
-const { generateTokens } = require("../services/tokenService")
+import pool from "../config/db.js";
+import bcrypt from "bcryptjs";
+import jwt from "jsonwebtoken";
+import { generateTokens } from "../services/tokenService.js";
 
-exports.login = async (req, res) => {
+export const login = async (req, res) => {
 
     const { username, password, deviceId } = req.body
 
@@ -48,7 +49,7 @@ exports.login = async (req, res) => {
     res.json({
         accessToken: tokens.accessToken,
         refreshToken: tokens.refreshToken,
-        expiresIn: 900,
+        expiresIn: 300,
         user: {
             id: user.id,
             role: user.role,
@@ -60,7 +61,7 @@ exports.login = async (req, res) => {
 };
 
 
-exports.refreshToken = async (req, res) => {
+export const refreshToken = async (req, res) => {
     try {
 
         const { refreshToken } = req.body;
@@ -82,7 +83,7 @@ exports.refreshToken = async (req, res) => {
 
         res.json({
             accessToken: tokens.accessToken,
-            expiresIn: 900
+            expiresIn: 300
         });
 
     } catch (error) {
@@ -95,7 +96,7 @@ exports.refreshToken = async (req, res) => {
 };
 
 
-exports.register = async (req, res) => {
+export const register = async (req, res) => {
 
     const { username, password, role, region, depot, deviceId, deviceName } = req.body;
 
@@ -114,7 +115,7 @@ exports.register = async (req, res) => {
 
         const result = await pool.query(
             `INSERT INTO users (username, password, role, region, depot, device_id)
-             VALUES ($1,$2,$3,$4,$5)
+             VALUES ($1,$2,$3,$4,$5,$6)
              RETURNING *`,
             [username, hashedPassword, role, region, depot, deviceId]
         );
@@ -138,7 +139,7 @@ exports.register = async (req, res) => {
         res.json({
             accessToken: tokens.accessToken,
             refreshToken: tokens.refreshToken,
-            expiresIn: 900
+            expiresIn: 300
         });
 
     } catch (error) {

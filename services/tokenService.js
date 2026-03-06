@@ -1,9 +1,7 @@
-const jwt = require("jsonwebtoken")
+import jwt from "jsonwebtoken";
+import { ACCESS_SECRET, REFRESH_SECRET } from "../config/env.js";
 
-const ACCESS_SECRET = process.env.ACCESS_SECRET;
-const REFRESH_SECRET = process.env.REFRESH_SECRET;
-
-function generateTokens(user) {
+export function generateTokens(user) {
 
     const accessToken = jwt.sign(
         {
@@ -13,7 +11,7 @@ function generateTokens(user) {
             depot: user.depot
         },
         ACCESS_SECRET,
-        { expiresIn: "15m" }
+        { expiresIn: "5m" }
     )
 
     const refreshToken = jwt.sign(
@@ -22,7 +20,5 @@ function generateTokens(user) {
         { expiresIn: "7d" }
     )
 
-    return { accessToken, refreshToken }
+    return { accessToken, refreshToken };
 }
-
-module.exports = { generateTokens }
