@@ -5,11 +5,13 @@ import { generateTokens } from "../services/tokenService.js";
 
 export const login = async (req, res) => {
 
-    const { username, password, deviceId } = req.body
+    const { login, password, deviceId } = req.body
 
     const result = await pool.query(
-        "SELECT * FROM users WHERE username=$1",
-        [username]
+        `SELECT * FROM users 
+         WHERE LOWER(username)=LOWER($1)
+         OR LOWER(email)=LOWER($1)`,
+        [login]
     )
 
     if (result.rows.length === 0) {
@@ -57,7 +59,6 @@ export const login = async (req, res) => {
             depot: user.depot
         }
     })
-
 };
 
 
@@ -98,7 +99,7 @@ export const refreshToken = async (req, res) => {
 
 export const register = async (req, res) => {
 
-    const { username, password, role, region, depot, deviceId, deviceName } = req.body;
+    const { username, email, password, role, region, depot, deviceId, deviceName } = req.body;
 
     try {
 
@@ -114,10 +115,10 @@ export const register = async (req, res) => {
         const hashedPassword = await bcrypt.hash(password, 10);
 
         const result = await pool.query(
-            `INSERT INTO users (username, password, role, region, depot, device_id)
-             VALUES ($1,$2,$3,$4,$5,$6)
+            `INSERT INTO users (username, email, password, role, region, depot, device_id)
+             VALUES ($1,$2,$3,$4,$5,$6,$7)
              RETURNING *`,
-            [username, hashedPassword, role, region, depot, deviceId]
+            [username, email, hashedPassword, role, region, depot, deviceId]
         );
 
         const user = result.rows[0];
