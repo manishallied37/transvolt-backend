@@ -12,3 +12,10 @@ CREATE TABLE refresh_tokens (
     expires_at TIMESTAMP,
     revoked BOOLEAN DEFAULT FALSE
 );
+
+CREATE TABLE otp_verifications (
+    id integer NOT NULL,
+    email text NOT NULL,
+    otp text NOT NULL,
+    expires_at timestamp NOT NULL
+);

@@ -2,6 +2,19 @@ import pool from "../config/db.js";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import { generateTokens } from "../services/tokenService.js";
+import { EMAIL_PASS, EMAIL_USER } from "../config/env.js";
+import nodemailer from "nodemailer";
+
+const transporter = nodemailer.createTransport({
+    host: "smtp.gmail.com",
+    port: 587,
+    secure: false,
+    family: 4,
+    auth: {
+        user: EMAIL_USER,
+        pass: EMAIL_PASS
+    }
+});
 
 export const login = async (req, res) => {
 
@@ -149,6 +162,126 @@ export const register = async (req, res) => {
 
         res.status(500).json({
             message: "Registration failed"
+        });
+    }
+};
+
+export const sendOtp = async (req, res) => {
+    const { email } = req.body;
+
+    try {
+
+        const user = await pool.query(
+            "SELECT * FROM users WHERE email=$1",
+            [email]
+        );
+
+        if (user.rows.length === 0) {
+            return res.status(404).json({ message: "User not found" });
+        }
+
+        const otp = Math.floor(100000 + Math.random() * 900000);
+        const expiry = new Date(Date.now() + 5 * 60 * 1000);
+
+        await pool.query(
+            "DELETE FROM otp_verifications WHERE email=$1",
+            [email]
+        );
+
+        await pool.query(
+            "INSERT INTO otp_verifications (email, otp, expires_at) VALUES ($1,$2,$3)",
+            [email, otp, expiry]
+        );
+
+        await transporter.sendMail({
+            from: '"Netradyne FMS Support" <netradyne.noreply@gmail.com>',
+            to: email,
+            subject: "Password Reset OTP",
+            text: 'Hello,\n\nYour OTP for password reset is:\t' + otp + '\n\nThis OTP will expire shortly.\n\nThis is a system generated email. Please do not reply to this email.\n\nRegards,\nNetradyne FMS Support'
+        });
+
+        res.json({ message: "OTP sent" });
+
+    } catch (error) {
+
+        console.error(error);
+
+        res.status(500).json({
+            message: "Error in sending OTP"
+        });
+    }
+};
+
+export const verifyOtp = async (req, res) => {
+    const { email, otp } = req.body;
+
+    try {
+
+        const result = await pool.query(
+            "SELECT * FROM otp_verifications WHERE email=$1",
+            [email]
+        );
+
+        if (result.rows.length === 0) {
+            return res.status(400).json({ message: "OTP not found" });
+        }
+
+        const record = result.rows[0];
+
+        if (record.otp != otp) {
+            return res.status(400).json({ message: "Invalid OTP" });
+        }
+
+        if (new Date(record.expires_at) < new Date()) {
+            return res.status(400).json({ message: "OTP expired" });
+        }
+
+        res.json({ message: "OTP verified" });
+
+    } catch (error) {
+
+        console.error(error);
+
+        res.status(500).json({
+            message: "Error in verifying OTP"
+        });
+    }
+};
+
+export const resetPassword = async (req, res) => {
+    const { email, password } = req.body;
+
+    try {
+
+        const user = await pool.query(
+            "SELECT * FROM users WHERE email=$1",
+            [email]
+        );
+
+        if (user.rows.length === 0) {
+            return res.status(404).json({ message: "User not found" });
+        }
+
+        const hashed = await bcrypt.hash(password, 10);
+
+        await pool.query(
+            "UPDATE users SET password=$1 WHERE email=$2",
+            [hashed, email]
+        );
+
+        await pool.query(
+            "DELETE FROM otp_verifications WHERE email=$1",
+            [email]
+        );
+
+        res.json({ message: "Password updated" });
+
+    } catch (error) {
+
+        console.error(error);
+
+        res.status(500).json({
+            message: "Error in resetting password"
         });
     }
 };
