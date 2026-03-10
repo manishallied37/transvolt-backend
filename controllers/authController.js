@@ -5,6 +5,7 @@ import { sendOtp } from "../services/auth/otpService.js";
 import { verifyOtpService } from "../services/auth/verifyOtpService.js";
 import { resetPasswordService } from "../services/auth/resetPasswordService.js";
 import { verifyLoginOtpService } from '../services/auth/verifyLoginOtpService.js'
+import { generateAlert as alertService } from '../services/alerts/alertService.js';
 
 export const login = async (req, res) => {
   try {
@@ -182,4 +183,23 @@ export const verifyLoginOtp = async (req, res) => {
     });
 
   }
+};
+
+
+export const generateAlerts = async (req, res) => {
+
+    try {
+
+        const { count = 1, type, overrides = {} } = req.body;
+
+        const result = await alertService(count, type, overrides);
+
+        return res.status(200).json(result);
+
+    } catch (err) {
+
+        return res.status(400).json({
+            message: err.message
+        });
+    }
 };

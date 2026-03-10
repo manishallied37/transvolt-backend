@@ -7,8 +7,10 @@ import {
   sendOtpC,
   verifyOtp,
   resetPassword,
-  verifyLoginOtp
+  verifyLoginOtp,
+  generateAlerts,
 } from "../controllers/authController.js";
+import { authMiddleware } from "../middleware/authMiddleware.js";
 
 const router = express.Router();
 
@@ -27,5 +29,6 @@ router.post("/send-otp", sendOtpC);
 router.post("/verify-otp", verifyOtp);
 router.post("/reset-password", resetPassword);
 router.post("/verify-login-otp", verifyLoginOtp);
+router.post("/api/alerts", authMiddleware, generateAlerts);
 
 export default router;

@@ -5,6 +5,8 @@ export const authMiddleware = (req, res, next) => {
 
     const authHeader = req.headers.authorization;
 
+    console.log("Authorization header:", req.headers.authorization);
+
     if (!authHeader || !authHeader.startsWith("Bearer ")) {
         return res.status(401).json({ message: "Authorization header missing" });
     }
