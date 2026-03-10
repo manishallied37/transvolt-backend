@@ -1,29 +1,37 @@
 import jwt from "jsonwebtoken";
+import { ACCESS_SECRET } from "../config/env.js";
 
-import { JWT_SECRET } from "../config/env.js";
+export const authMiddleware = (req, res, next) => {
 
-module.exports = (req, res, next) => {
+    const authHeader = req.headers.authorization;
 
-    const authHeader = req.headers.authorization
-
-    if (!authHeader) {
-        return res.status(401).json({ message: "Unauthorized" })
+    if (!authHeader || !authHeader.startsWith("Bearer ")) {
+        return res.status(401).json({ message: "Authorization header missing" });
     }
 
-    const token = authHeader.split(" ")[1]
+    const token = authHeader.split(" ")[1];
 
     try {
 
-        const decoded = jwt.verify(token, JWT_SECRET)
+        const decoded = jwt.verify(token, ACCESS_SECRET, {
+            issuer: "auth-service",
+            audience: "netradyne-api"
+        });
 
-        req.user = decoded
+        if (decoded.type !== "access") {
+            return res.status(401).json({ message: "Invalid token type" });
+        }
 
-        next()
+        req.user = decoded;
+
+        next();
 
     } catch (err) {
 
-        res.status(401).json({ message: "Invalid token" })
+        if (err.name === "TokenExpiredError") {
+            return res.status(401).json({ message: "Token expired" });
+        }
 
+        return res.status(401).json({ message: "Invalid token" });
     }
-
-}
+};

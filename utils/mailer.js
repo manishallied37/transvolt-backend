@@ -6,6 +6,21 @@ export const transporter = nodemailer.createTransport({
     port: 587,
     secure: false,
     family: 4,
+
+    pool: true,
+    maxConnections: 5,
+    maxMessages: 100,
+
+    connectionTimeout: 10000,
+    greetingTimeout: 10000,
+    socketTimeout: 10000,
+
+    requireTLS: true,
+
+    tls: {
+        rejectUnauthorized: true
+    },
+
     auth: {
         user: EMAIL_USER,
         pass: EMAIL_PASS
