@@ -19,7 +19,7 @@ export const refreshTokenService = async (refreshToken) => {
         let tokenRecord = null;
 
         for (const record of tokenRecords.rows) {
-            const match = await bcrypt.compare(refreshToken, record.token_hash);
+            const match = await bcrypt.compare(refreshToken, record.token);
             if (match) {
                 tokenRecord = record;
                 break;
