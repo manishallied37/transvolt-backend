@@ -68,3 +68,36 @@ UNIQUE (user_id, device_id);
 
 CREATE INDEX idx_devices_user
 ON devices(user_id);
+
+ALTER TABLE refresh_tokens
+ADD COLUMN jti VARCHAR(255);
+
+ALTER TABLE refresh_tokens
+ADD CONSTRAINT unique_jti UNIQUE (jti);
+
+CREATE INDEX idx_refresh_tokens_jti
+ON refresh_tokens(jti);
+
+CREATE INDEX idx_otp_identifier
+ON otp_verifications(identifier);
+
+CREATE TABLE sessions (
+    id UUID PRIMARY KEY,
+    user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    device_id TEXT,
+    ip_address TEXT,
+    user_agent TEXT,
+    revoked BOOLEAN DEFAULT FALSE,
+    last_used_at TIMESTAMP,
+    created_at TIMESTAMP DEFAULT NOW(),
+    expires_at TIMESTAMP NOT NULL
+);
+
+CREATE INDEX idx_sessions_user
+ON sessions(user_id);
+
+ALTER TABLE refresh_tokens
+ADD COLUMN session_id UUID REFERENCES sessions(id);
+
+ALTER TABLE otp_verifications
+ADD CONSTRAINT otp_identifier_unique UNIQUE (identifier);

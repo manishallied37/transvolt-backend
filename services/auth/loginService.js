@@ -11,7 +11,7 @@ export const login = async (req, res) => {
 
     const { login, password, deviceId } = req.body;
 
-    if (!login || !password) {
+    if (!login || !password || !deviceId) {
       return res.status(400).json({
         message: "Invalid request"
       });
@@ -19,7 +19,7 @@ export const login = async (req, res) => {
 
     const result = await loginService(login, password, deviceId);
 
-    res.status(200).json({
+    return res.status(200).json({
       message: result.message,
       userId: result.userId,
       phone: result.phone
@@ -27,7 +27,9 @@ export const login = async (req, res) => {
 
   } catch (error) {
 
-    res.status(400).json({
+    const statusCode = error.statusCode || 400;
+
+    return res.status(statusCode).json({
       message: error.message
     });
 
@@ -40,12 +42,13 @@ export const loginService = async (login, password, deviceId) => {
 
   try {
 
-    await client.query("BEGIN");
-
     const result = await client.query(
-      `SELECT * FROM users 
+      `SELECT id, username, email, password, is_active,
+              failed_login_attempts, account_locked_until,
+              mobile_number, device_id
+       FROM users
        WHERE LOWER(username)=LOWER($1)
-       OR LOWER(email)=LOWER($1)
+          OR LOWER(email)=LOWER($1)
        LIMIT 1`,
       [login]
     );
@@ -54,21 +57,29 @@ export const loginService = async (login, password, deviceId) => {
 
     if (!user) {
       await bcrypt.compare(password, DUMMY_HASH);
-      throw new Error("Invalid credentials");
+      const err = new Error("Invalid credentials");
+      err.statusCode = 401;
+      throw err;
     }
 
     if (!user.is_active) {
-      throw new Error("Account disabled");
+      const err = new Error("Account disabled");
+      err.statusCode = 403;
+      throw err;
     }
 
     if (
       user.account_locked_until &&
       new Date(user.account_locked_until) > new Date()
     ) {
-      throw new Error("Account temporarily locked");
+      const err = new Error("Account temporarily locked");
+      err.statusCode = 423;
+      throw err;
     }
 
     const validPassword = await bcrypt.compare(password, user.password);
+
+    await client.query("BEGIN");
 
     if (!validPassword) {
 
@@ -78,16 +89,18 @@ export const loginService = async (login, password, deviceId) => {
              account_locked_until =
                CASE
                  WHEN failed_login_attempts + 1 >= $2
-                 THEN NOW() + INTERVAL '${LOCK_TIME_MINUTES} minutes'
+                 THEN NOW() + ($3 * INTERVAL '1 minute')
                  ELSE account_locked_until
                END
-         WHERE id=$1`,
-        [user.id, MAX_FAILED_ATTEMPTS]
+         WHERE id = $1`,
+        [user.id, MAX_FAILED_ATTEMPTS, LOCK_TIME_MINUTES]
       );
 
       await client.query("COMMIT");
 
-      throw new Error("Invalid credentials");
+      const err = new Error("Invalid credentials");
+      err.statusCode = 401;
+      throw err;
     }
 
     await client.query(
@@ -98,14 +111,18 @@ export const loginService = async (login, password, deviceId) => {
     );
 
     if (!user.mobile_number) {
-      throw new Error("MFA not configured");
+      const err = new Error("MFA not configured");
+      err.statusCode = 403;
+      throw err;
     }
 
     if (user.device_id && user.device_id !== deviceId) {
-      throw new Error("Unrecognized device");
+      const err = new Error("Unrecognized device");
+      err.statusCode = 403;
+      throw err;
     }
 
-    if (!user.device_id && deviceId) {
+    if (!user.device_id) {
       await client.query(
         `UPDATE users SET device_id=$1 WHERE id=$2`,
         [deviceId, user.id]

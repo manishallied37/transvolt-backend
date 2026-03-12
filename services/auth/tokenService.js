@@ -1,39 +1,57 @@
 import jwt from "jsonwebtoken";
 import crypto from "crypto";
-import { ACCESS_SECRET, REFRESH_SECRET } from "../../config/env.js";
 
-export function generateTokens(user) {
+import {
+  ACCESS_SECRET,
+  REFRESH_SECRET,
+  TOKEN_ISSUER,
+  TOKEN_AUDIENCE,
+  ACCESS_TOKEN_TTL,
+  REFRESH_TOKEN_TTL
+} from "../../config/env.js";
 
-    const accessToken = jwt.sign(
-        {
-            jti: crypto.randomUUID(),
-            type: "access",
-            id: user.id,
-            role: user.role,
-            region: user.region,
-            depot: user.depot
-        },
-        ACCESS_SECRET,
-        {
-            expiresIn: "5m",
-            issuer: "auth-service",
-            audience: "netradyne-api"
-        }
-    );
+export function generateTokens(user, sessionId) {
 
-    const refreshToken = jwt.sign(
-        {
-            jti: crypto.randomUUID(),
-            type: "refresh",
-            id: user.id
-        },
-        REFRESH_SECRET,
-        {
-            expiresIn: "7d",
-            issuer: "auth-service",
-            audience: "netradyne-api"
-        }
-    );
+  const accessJti = crypto.randomUUID();
+  const refreshJti = crypto.randomUUID();
 
-    return { accessToken, refreshToken };
+  const accessToken = jwt.sign(
+    {
+      jti: accessJti,
+      sessionId: sessionId,
+      id: user.id,
+      username: user.username,
+      email: user.email,
+      role: user.role,
+      region: user.region,
+      depot: user.depot
+    },
+    ACCESS_SECRET,
+    {
+      expiresIn: ACCESS_TOKEN_TTL,
+      issuer: TOKEN_ISSUER,
+      audience: TOKEN_AUDIENCE
+    }
+  );
+
+  const refreshToken = jwt.sign(
+    {
+      jti: refreshJti,
+      sessionId: sessionId,
+      id: user.id
+    },
+    REFRESH_SECRET,
+    {
+      expiresIn: REFRESH_TOKEN_TTL,
+      issuer: TOKEN_ISSUER,
+      audience: TOKEN_AUDIENCE
+    }
+  );
+
+  return {
+    accessToken,
+    refreshToken,
+    accessJti,
+    refreshJti
+  };
 }

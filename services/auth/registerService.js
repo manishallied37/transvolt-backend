@@ -4,105 +4,100 @@ import { generateTokens } from "./tokenService.js";
 
 export const registerService = async (data) => {
 
-    const client = await pool.connect();
+  const {
+    username,
+    email,
+    password,
+    role,
+    region,
+    depot,
+    deviceId,
+    deviceName,
+    mobile_number
+  } = data;
 
-    try {
+  if (!deviceId) {
+    throw new Error("Device ID required");
+  }
 
-        await client.query("BEGIN");
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  if (!emailRegex.test(email)) {
+    throw new Error("Invalid email format");
+  }
 
-        const {
-            username,
-            email,
-            password,
-            role,
-            region,
-            depot,
-            deviceId,
-            deviceName,
-            mobile_number
-        } = data;
+  const passwordRegex =
+    /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&]).{8,}$/;
 
-        if (!deviceId) {
-            throw new Error("Device ID required");
-        }
+  if (!passwordRegex.test(password)) {
+    throw new Error("Password does not meet security requirements");
+  }
 
-        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-        if (!emailRegex.test(email)) {
-            throw new Error("Invalid email format");
-        }
+  const hashedPassword = await bcrypt.hash(password, 12);
 
-        const passwordRegex =
-            /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&]).{8,}$/;
+  const client = await pool.connect();
 
-        if (!passwordRegex.test(password)) {
-            throw new Error("Password does not meet security requirements");
-        }
+  try {
 
-        const existing = await client.query(
-            `SELECT id FROM users
-             WHERE LOWER(username)=LOWER($1)
-             OR LOWER(email)=LOWER($2)
-             OR mobile_number=$3`,
-            [username, email, mobile_number]
-        );
+    await client.query("BEGIN");
 
-        if (existing.rows.length > 0) {
-            throw new Error("User already exists");
-        }
+    const result = await client.query(
+      `INSERT INTO users
+       (username,email,password,role,region,depot,device_id,mobile_number)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
+       RETURNING id,username,email,role,region,depot`,
+      [
+        username.toLowerCase(),
+        email.toLowerCase(),
+        hashedPassword,
+        role,
+        region,
+        depot,
+        deviceId,
+        mobile_number
+      ]
+    );
 
-        const hashedPassword = await bcrypt.hash(password, 12);
+    const user = result.rows[0];
 
-        const result = await client.query(
-            `INSERT INTO users
-            (username,email,password,role,region,depot,device_id,mobile_number)
-            VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
-            RETURNING id,username,email,role,region,depot`,
-            [
-                username,
-                email,
-                hashedPassword,
-                role,
-                region,
-                depot,
-                deviceId,
-                mobile_number
-            ]
-        );
+    await client.query(
+      `INSERT INTO devices (user_id, device_id, device_name)
+       VALUES ($1,$2,$3)
+       ON CONFLICT (user_id, device_id) DO NOTHING`,
+      [user.id, deviceId, deviceName || "Unknown Device"]
+    );
 
-        const user = result.rows[0];
+    const tokens = generateTokens(user);
 
-        await client.query(
-            `INSERT INTO devices (user_id, device_id, device_name)
-             VALUES ($1,$2,$3)
-             ON CONFLICT (user_id, device_id) DO NOTHING`,
-            [user.id, deviceId, deviceName]
-        );
+    const refreshHash = await bcrypt.hash(tokens.refreshToken, 10);
 
-        const tokens = generateTokens(user);
+    await client.query(
+      `INSERT INTO refresh_tokens
+       (user_id, jti, token, device_id, expires_at, revoked)
+       VALUES ($1,$2,$3,$4,NOW() + INTERVAL '7 days', false)`,
+      [user.id, tokens.jti, refreshHash, deviceId]
+    );
 
-        const refreshHash = await bcrypt.hash(tokens.refreshToken, 10);
+    await client.query("COMMIT");
 
-        await client.query(
-            `INSERT INTO refresh_tokens
-            (user_id, token, device_id, expires_at)
-            VALUES ($1,$2,$3,NOW() + interval '7 days')`,
-            [user.id, refreshHash, deviceId]
-        );
+    return {
+      user,
+      tokens
+    };
 
-        await client.query("COMMIT");
+  } catch (err) {
 
-        return {
-            user,
-            tokens
-        };
+    await client.query("ROLLBACK");
 
-    } catch (err) {
-
-        await client.query("ROLLBACK");
-        throw err;
-
-    } finally {
-
-        client.release();
+    if (err.code === "23505") {
+      throw new Error("User already exists");
     }
+
+    throw err;
+
+  } finally {
+
+    client.release();
+
+  }
+
 };
