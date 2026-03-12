@@ -2,6 +2,7 @@ import pool from "../../config/db.js";
 import jwt from "jsonwebtoken";
 import { generateTokens } from "./tokenService.js";
 import { REFRESH_SECRET } from "../../config/env.js";
+import crypto from "crypto";
 
 export const refreshTokenService = async (refreshToken) => {
 
@@ -72,13 +73,23 @@ export const refreshTokenService = async (refreshToken) => {
 
     const newTokens = generateTokens(user, sessionId);
 
+    const hashedToken = crypto
+      .createHash("sha256")
+      .update(newTokens.refreshToken)
+      .digest("hex");
+
     await client.query(
       `
       INSERT INTO refresh_tokens
-      (jti,user_id,session_id,expires_at)
-      VALUES ($1,$2,$3,NOW() + INTERVAL '7 days')
+      (jti, token, user_id, session_id, expires_at)
+      VALUES ($1,$2,$3,$4,NOW() + INTERVAL '7 days')
       `,
-      [newTokens.refreshJti, user.id, sessionId]
+      [
+        newTokens.refreshJti,
+        hashedToken,
+        user.id,
+        sessionId
+      ]
     );
 
     await client.query("COMMIT");
