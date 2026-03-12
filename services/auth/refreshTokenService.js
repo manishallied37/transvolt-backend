@@ -3,19 +3,19 @@ import jwt from "jsonwebtoken";
 import { generateTokens } from "./tokenService.js";
 import { REFRESH_SECRET } from "../../config/env.js";
 import crypto from "crypto";
- 
+
 export const refreshTokenService = async (refreshToken) => {
- 
+
   const client = await pool.connect();
- 
+
   try {
- 
+
     await client.query("BEGIN");
- 
+
     const decoded = jwt.verify(refreshToken, REFRESH_SECRET);
- 
+
     const { id, sessionId, jti } = decoded;
- 
+
     const tokenRow = await client.query(
       `
       SELECT *
@@ -25,21 +25,21 @@ export const refreshTokenService = async (refreshToken) => {
       `,
       [jti]
     );
- 
+
     if (!tokenRow.rows.length) {
       throw new Error("Invalid refresh token");
     }
- 
+
     const tokenRecord = tokenRow.rows[0];
- 
+
     if (tokenRecord.revoked) {
       throw new Error("Refresh token revoked");
     }
- 
+
     if (new Date(tokenRecord.expires_at) < new Date()) {
       throw new Error("Refresh token expired");
     }
- 
+
     const session = await client.query(
       `
       SELECT revoked, expires_at
@@ -48,19 +48,19 @@ export const refreshTokenService = async (refreshToken) => {
       `,
       [sessionId]
     );
- 
+
     if (!session.rows.length) {
       throw new Error("Session not found");
     }
- 
+
     if (session.rows[0].revoked) {
       throw new Error("Session revoked");
     }
- 
+
     if (new Date(session.rows[0].expires_at) < new Date()) {
       throw new Error("Session expired");
     }
- 
+
     await client.query(
       `
       DELETE FROM refresh_tokens
@@ -68,16 +68,29 @@ export const refreshTokenService = async (refreshToken) => {
       `,
       [jti]
     );
- 
-    const user = { id };
- 
+
+    const userResult = await client.query(
+      `
+      SELECT id, username, email, role, region, depot
+      FROM users
+      WHERE id=$1
+      `,
+      [id]
+    );
+
+    if (!userResult.rows.length) {
+      throw new Error("User not found");
+    }
+
+    const user = userResult.rows[0];
+
     const newTokens = generateTokens(user, sessionId);
- 
+
     const hashedToken = crypto
       .createHash("sha256")
       .update(newTokens.refreshToken)
       .digest("hex");
- 
+
     await client.query(
       `
       INSERT INTO refresh_tokens
@@ -91,20 +104,20 @@ export const refreshTokenService = async (refreshToken) => {
         sessionId
       ]
     );
- 
+
     await client.query("COMMIT");
- 
+
     return newTokens;
- 
+
   } catch (err) {
- 
+
     await client.query("ROLLBACK");
     throw err;
- 
+
   } finally {
- 
+
     client.release();
- 
+
   }
- 
+
 };
