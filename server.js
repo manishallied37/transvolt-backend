@@ -5,6 +5,7 @@ import cors from "cors";
 import helmet from "helmet";
 import rateLimit from "express-rate-limit";
 import morgan from "morgan";
+import crypto from "crypto";
 
 import authRoutes from "./routes/authRoutes.js";
 
@@ -13,33 +14,40 @@ const app = express();
 app.set("trust proxy", 1);
 app.disable("x-powered-by");
 
-app.use(helmet({
-    contentSecurityPolicy: false
-}));
-
-morgan.token("ist-time", () => {
-    return new Date().toLocaleString("en-IN", {
-        timeZone: "Asia/Kolkata",
-        hour12: false
-    });
-});
-
 app.use(
-    morgan(':remote-addr - [:ist-time] ":method :url HTTP/:http-version" :status :res[content-length] ":referrer" ":user-agent"')
+  helmet({
+    contentSecurityPolicy: false,
+    crossOriginEmbedderPolicy: false
+  })
 );
 
-app.use(cors({
-    origin: ["*"],
+app.use((req, res, next) => {
+  req.id = crypto.randomUUID();
+  next();
+});
+
+morgan.token("req-id", (req) => req.id);
+
+app.use(
+  morgan(
+    ':remote-addr [:date[iso]] req-id=:req-id ":method :url" :status :res[content-length] - :response-time ms'
+  )
+);
+
+app.use(
+  cors({
+    origin: "*",
     methods: ["GET", "POST", "PUT", "DELETE"],
     allowedHeaders: ["Content-Type", "Authorization"]
-}));
+  })
+);
 
 app.use(express.json({ limit: "10kb" }));
 app.use(express.urlencoded({ extended: true, limit: "10kb" }));
 
 const apiLimiter = rateLimit({
-    windowMs: 15 * 60 * 1000,
-    max: 100
+  windowMs: 15 * 60 * 1000,
+  max: 100
 });
 
 app.use(apiLimiter);
@@ -47,22 +55,25 @@ app.use(apiLimiter);
 app.use("/auth", authRoutes);
 
 app.get("/health", (req, res) => {
-    res.status(200).json({
-        status: "UP",
-        timestamp: new Date()
-    });
+  res.status(200).json({
+    status: "UP",
+    timestamp: new Date()
+  });
 });
 
 app.use((err, req, res, next) => {
 
-    console.error(err.stack);
+  console.error(`[${req.id}]`, err);
 
-    res.status(err.status || 500).json({
-        error: err.message || "Internal server error"
-    });
+  res.status(err.status || 500).json({
+    message: err.message || "Internal server error",
+    requestId: req.id
+  });
 
 });
 
-app.listen(5000, "0.0.0.0", () => {
-    console.log("Server running on port 5000");
+const PORT = process.env.PORT || 5000;
+
+app.listen(PORT, "0.0.0.0", () => {
+  console.log(`Server running on port ${PORT}`);
 });

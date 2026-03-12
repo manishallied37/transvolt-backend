@@ -4,10 +4,13 @@ import { refreshTokenService } from "../services/auth/refreshTokenService.js";
 import { sendOtp } from "../services/auth/otpService.js";
 import { verifyOtpService } from "../services/auth/verifyOtpService.js";
 import { resetPasswordService } from "../services/auth/resetPasswordService.js";
-import { verifyLoginOtpService } from '../services/auth/verifyLoginOtpService.js'
-import { generateAlert as alertService } from '../services/alerts/alertService.js';
+import { verifyLoginOtpService } from "../services/auth/verifyLoginOtpService.js";
+import { generateAlert as alertService } from "../services/alerts/alertService.js";
+import { logoutService } from "../services/auth/logoutService.js";
+import { logoutAllDevicesService } from "../services/auth/logoutFromAllDevices.js"
 
 export const login = async (req, res) => {
+
   try {
 
     const { login, password, deviceId } = req.body;
@@ -20,134 +23,126 @@ export const login = async (req, res) => {
 
     const result = await loginService(login, password, deviceId);
 
-    res.status(200).json({
-      message: result.message,
-      userId: result.userId,
-      phone:result.phone
-    });
+    return res.status(200).json(result);
 
   } catch (error) {
 
-    console.error("Error:", error.message);
-    console.error("Request Body:", req.body);
-
-    res.status(400).json({
+    return res.status(401).json({
       message: error.message
     });
 
   }
+
 };
 
 export const register = async (req, res) => {
-    try {
 
-        const tokens = await registerService(req.body);
+  try {
 
-        res.json(tokens);
+    const result = await registerService(req.body);
 
-    } catch (error) {
+    return res.status(201).json(result);
 
-        console.error("Error:", error.message);
-        console.error("Request Body:", req.body);
+  } catch (error) {
 
-        res.status(400).json({
-            message: error.message
-        });
+    return res.status(400).json({
+      message: error.message
+    });
 
-    }
+  }
+
 };
 
 export const refreshToken = async (req, res) => {
-    try {
 
-        const { refreshToken } = req.body;
+  try {
 
-        const tokens = await refreshTokenService(refreshToken);
+    const { refreshToken } = req.body;
 
-        res.json(tokens);
-
-    } catch (error) {
-
-        console.error("Error:", error.message);
-        console.error("Request Body:", req.body);
-
-        res.status(403).json({
-            message: error.message
-        });
-
+    if (!refreshToken) {
+      return res.status(400).json({
+        message: "Refresh token required"
+      });
     }
+
+    const tokens = await refreshTokenService(refreshToken);
+
+    return res.status(200).json(tokens);
+
+  } catch (error) {
+
+    return res.status(403).json({
+      message: error.message
+    });
+
+  }
+
 };
 
 export const sendOtpC = async (req, res) => {
-    try {
 
-        const { identifier, method } = req.body;
+  try {
 
-        await sendOtp(identifier, method);
+    const { identifier, method } = req.body;
 
-        return res.status(200).json({
-            message: "OTP sent successfully"
-        });
+    await sendOtp(identifier, method);
 
-    } catch (error) {
+    return res.status(200).json({
+      message: "OTP sent successfully"
+    });
 
-        console.error("Error:", error.message);
-        console.error("Request Body:", req.body);
+  } catch (error) {
 
-        return res.status(500).json({
-            message: "Failed to send OTP"
-        });
-    }
+    return res.status(400).json({
+      message: error.message
+    });
+
+  }
+
 };
-
 
 export const verifyOtp = async (req, res) => {
 
-    try {
+  try {
 
-        const { identifier, otp, method } = req.body;
+    const { identifier, otp } = req.body;
 
-        await verifyOtpService(identifier, otp, method);
+    await verifyOtpService(identifier, otp);
 
-        res.status(200).json({
-            message: "OTP verified successfully"
-        });
+    return res.status(200).json({
+      message: "OTP verified successfully"
+    });
 
-    } catch (error) {
+  } catch (error) {
 
-        console.error("Error:", error.message);
-        console.error("Request Body:", req.body);
+    return res.status(400).json({
+      message: error.message
+    });
 
-        res.status(400).json({
-            message: error.message
-        });
-
-    }
+  }
 
 };
 
 export const resetPassword = async (req, res) => {
 
-    try {
+  try {
 
-        const { identifier, password, method } = req.body;
+    const { identifier, password, method } = req.body;
 
-        await resetPasswordService(identifier, password, method);
+    await resetPasswordService(identifier, password, method);
 
-        res.status(200).json({
-            message: "Password reset successful"
-        });
+    return res.status(200).json({
+      message: "Password reset successful"
+    });
 
-    } catch (error) {
+  } catch (error) {
 
-        console.error("Error:", error.message);
-        console.error("Request Body:", req.body);
+    return res.status(400).json({
+      message: error.message
+    });
 
-        res.status(400).json({
-            message: error.message
-        });
+  }
 
-    }
 };
 
 export const verifyLoginOtp = async (req, res) => {
@@ -155,51 +150,96 @@ export const verifyLoginOtp = async (req, res) => {
 
     const { identifier, otp, deviceId } = req.body;
 
-    console.log("Identifier:", identifier);
-    console.log("Entered OTP:", otp);
-
     if (!identifier || !otp || !deviceId) {
       return res.status(400).json({
         message: "identifier, otp and deviceId are required"
       });
     }
 
-    const result = await verifyLoginOtpService(identifier, otp, deviceId);
+    const userAgent = req.headers["user-agent"];
+    const ipAddress =
+      req.headers["x-forwarded-for"]?.split(",")[0] || req.socket.remoteAddress;
+
+    const result = await verifyLoginOtpService(
+      identifier,
+      otp,
+      deviceId,
+      userAgent,
+      ipAddress
+    );
 
     return res.status(200).json({
       message: "Login successful",
-      user: result.user,
-      accessToken: result.tokens.accessToken,
-      refreshToken: result.tokens.refreshToken
+      ...result
     });
 
   } catch (error) {
-
-    console.error("Error:", error.message);
-    console.error("Request Body:", req.body);
-
-    return res.status(400).json({
+    return res.status(401).json({
       message: error.message
     });
-
   }
 };
 
-
 export const generateAlerts = async (req, res) => {
 
-    try {
+  try {
 
-        const { count = 1, type, overrides = {} } = req.body;
+    const { count = 1, type, overrides = {} } = req.body;
 
-        const result = await alertService(count, type, overrides);
+    const result = await alertService(count, type, overrides);
 
-        return res.status(200).json(result);
+    return res.status(200).json(result);
 
-    } catch (err) {
+  } catch (err) {
 
-        return res.status(400).json({
-            message: err.message
-        });
-    }
+    return res.status(400).json({
+      message: err.message
+    });
+
+  }
+
+};
+
+export const logoutController = async (req,res) => {
+
+  try {
+
+    const sessionId = req.user.sessionId
+
+    const result = await logoutService(sessionId)
+
+    return res.status(200).json(result)
+
+  } catch(err) {
+
+    console.error("Logout error:",err)
+
+    return res.status(500).json({
+      message:"Logout failed"
+    })
+
+  }
+
+};
+
+export const logoutAllDevicesController = async (req,res) => {
+
+  try {
+
+    const userId = req.user.id
+
+    const result = await logoutAllDevicesService(userId)
+
+    return res.status(200).json(result)
+
+  } catch(err){
+
+    console.error("Logout all error:",err)
+
+    return res.status(500).json({
+      message:"Logout all devices failed"
+    })
+
+  }
+
 };

@@ -1,6 +1,5 @@
 import pool from "../../config/db.js";
 import { transporter } from "../../utils/mailer.js";
-import bcrypt from "bcryptjs";
 import crypto from "crypto";
 import { sendSMS } from "../../utils/sms.js";
 
@@ -11,24 +10,23 @@ export const sendOtp = async (identifier, method) => {
 
   const client = await pool.connect();
 
-  let otp;
-  let hashedOtp;
-  let expiry;
+  const otp = crypto.randomInt(100000, 999999).toString();
+
+  const otpHash = crypto
+    .createHash("sha256")
+    .update(otp)
+    .digest("hex");
+
+  const expiry = new Date(Date.now() + OTP_EXPIRY_MINUTES * 60 * 1000);
 
   try {
-
-    otp = crypto.randomInt(100000, 999999).toString();
-    hashedOtp = await bcrypt.hash(otp, 10);
-
-    expiry = new Date(Date.now() + OTP_EXPIRY_MINUTES * 60 * 1000);
 
     await client.query("BEGIN");
 
     const existing = await client.query(
-      `SELECT created_at 
+      `SELECT created_at
        FROM otp_verifications
-       WHERE identifier=$1
-       ORDER BY created_at DESC
+       WHERE identifier = $1
        LIMIT 1`,
       [identifier]
     );
@@ -44,15 +42,16 @@ export const sendOtp = async (identifier, method) => {
     }
 
     await client.query(
-      `DELETE FROM otp_verifications WHERE identifier=$1`,
-      [identifier]
-    );
-
-    await client.query(
       `INSERT INTO otp_verifications
        (identifier, otp_hash, expires_at, attempts)
-       VALUES ($1,$2,$3,0)`,
-      [identifier, hashedOtp, expiry]
+       VALUES ($1,$2,$3,0)
+       ON CONFLICT (identifier)
+       DO UPDATE SET
+         otp_hash = EXCLUDED.otp_hash,
+         expires_at = EXCLUDED.expires_at,
+         attempts = 0,
+         created_at = NOW()`,
+      [identifier, otpHash, expiry]
     );
 
     await client.query("COMMIT");
@@ -60,8 +59,11 @@ export const sendOtp = async (identifier, method) => {
   } catch (err) {
 
     await client.query("ROLLBACK");
-    client.release();
     throw err;
+
+  } finally {
+
+    client.release();
 
   }
 
@@ -78,7 +80,8 @@ export const sendOtp = async (identifier, method) => {
 
     } else if (method === "phone") {
 
-      const message = `Your OTP is ${otp}. It will expire in ${OTP_EXPIRY_MINUTES} minutes.`;
+      const message =
+        `Your OTP is ${otp}. It expires in ${OTP_EXPIRY_MINUTES} minutes.`;
 
       await sendSMS(identifier, message);
 
@@ -97,9 +100,6 @@ export const sendOtp = async (identifier, method) => {
 
     throw new Error("Failed to send OTP. Please try again.");
 
-  } finally {
-
-    client.release();
-
   }
+
 };
