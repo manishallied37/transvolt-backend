@@ -37,24 +37,13 @@ const refreshLimiter = rateLimit({
   message: "Too many refresh attempts"
 });
 
-// router.post("/login" , login);
-// router.post("/register", register);
-// router.post("/refresh", loginLimiter ,refreshToken);
-// router.post("/send-otp", otpLimiter ,sendOtpC);
-// router.post("/verify-otp", otpLimiter ,verifyOtp);
-// router.post("/reset-password", otpLimiter ,resetPassword);
-// router.post("/verify-login-otp", otpLimiter ,verifyLoginOtp);
-// router.post("/api/alerts", authMiddleware, generateAlerts);
-// router.post("/logout", authMiddleware, logoutController);
-// router.post("/logout-all",authMiddleware,logoutAllDevicesController);
-
-router.post("/login" , login);
+router.post("/login", loginLimiter, login);
 router.post("/register", register);
-router.post("/refresh",refreshToken);
-router.post("/send-otp",sendOtpC);
-router.post("/verify-otp", verifyOtp);
-router.post("/reset-password", resetPassword);
-router.post("/verify-login-otp",verifyLoginOtp);
+router.post("/refresh", loginLimiter ,refreshToken);
+router.post("/send-otp", otpLimiter ,sendOtpC);
+router.post("/verify-otp", otpLimiter ,verifyOtp);
+router.post("/reset-password", otpLimiter ,resetPassword);
+router.post("/verify-login-otp", otpLimiter ,verifyLoginOtp);
 router.post("/api/alerts", authMiddleware, generateAlerts);
 router.post("/logout", authMiddleware, logoutController);
 router.post("/logout-all",authMiddleware,logoutAllDevicesController);
