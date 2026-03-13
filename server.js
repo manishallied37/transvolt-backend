@@ -10,6 +10,8 @@ import crypto from "crypto";
 import authRoutes from "./routes/authRoutes.js";
 import eventRoutes from "./media/routes/eventRoutes.js";
 import netradyneRoutes from "./media/routes/netradyneRoutes.js";
+import dashboardRoutes from "./routes/dashboardRoutes.js";
+import alertRoutes from "./routes/alertRoutes.js";
  
 const app = express();
  
@@ -57,7 +59,8 @@ app.use(apiLimiter);
 app.use("/auth", authRoutes);
 app.use("/events", eventRoutes);
 app.use("/netradyne", netradyneRoutes);
-
+app.use("/alerts", alertRoutes);
+app.use("/dashboard", dashboardRoutes);
  
 app.get("/health", (req, res) => {
   res.status(200).json({
